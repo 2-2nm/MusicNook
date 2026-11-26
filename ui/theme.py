@@ -42,7 +42,7 @@ QFrame#segFrame{background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,
 QPushButton#seg{background:transparent;border:none;border-radius:17px;padding:0 20px;color:#aab0c8;font-size:15px;font-weight:600;}
 QPushButton#seg:checked{background:rgba(255,255,255,0.14);color:#ffffff;}
 QPushButton#seg:hover:!checked{color:#ffffff;}
-QLineEdit#search{background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.10);border-radius:21px;padding:0 22px;color:#f3f5ff;font-size:15px;selection-background-color:#4f7bff;}
+QLineEdit#search{background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.10);border-radius:21px;padding:0 22px 0 46px;color:#f3f5ff;font-size:15px;selection-background-color:#4f7bff;}
 QLineEdit#search:focus{border-color:rgba(124,156,255,0.6);}
 QPushButton#primary{background:#ffffff;color:#0a0b14;border:none;border-radius:22px;padding:0 26px;font-size:15px;font-weight:600;}
 QPushButton#primary:hover{background:#e6e9ff;}

@@ -73,7 +73,9 @@ class TrackListModel(QAbstractListModel):
             q = self._query
             rows = [t for t in rows if q in t.title.casefold() or q in t.artist.casefold() or q in t.album.casefold()]
         key = self.sort_key
-        if key == "added":
+        if key == "manual":
+            pass  # keep the order the list was given in (playlist order, most played ...)
+        elif key == "added":
             rows = sorted(rows, key=lambda t: t.added, reverse=True)
         else:
             rows = sorted(rows, key=lambda t: (getattr(t, key).casefold(), t.title.casefold()))

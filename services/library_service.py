@@ -1,6 +1,8 @@
 import os
 import sqlite3
 import threading
+import time
+from contextlib import closing
 from pathlib import Path
 
 from PySide6.QtCore import QObject, Signal
@@ -19,6 +21,7 @@ AUDIO_EXT = {".mp3": "MP3", ".flac": "FLAC", ".m4a": "AAC", ".aac": "AAC",
 class LibraryService(QObject):
     changed = Signal()
     scanFinished = Signal(int)
+    statsChanged = Signal()  # play counts / last played changed (cheap: no library reload)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -30,9 +33,26 @@ class LibraryService(QObject):
             c.execute("""CREATE TABLE IF NOT EXISTS tracks(
                 id INTEGER PRIMARY KEY AUTOINCREMENT, path TEXT UNIQUE,
                 title TEXT, artist TEXT, album TEXT, added REAL, fmt TEXT, duration REAL)""")
+            c.execute("""CREATE TABLE IF NOT EXISTS play_stats(
+                track_id INTEGER PRIMARY KEY, play_count INTEGER NOT NULL DEFAULT 0, last_played REAL)""")
 
     def _conn(self):
         return sqlite3.connect(self.db_path)
+
+    def record_play(self, track_id: int):
+        """One more play of this track (counted by the window once enough of it has been heard)."""
+        with closing(self._conn()) as c:
+            c.execute("""INSERT INTO play_stats(track_id, play_count, last_played) VALUES(?,1,?)
+                         ON CONFLICT(track_id) DO UPDATE SET play_count=play_count+1, last_played=excluded.last_played""",
+                      (track_id, time.time()))
+            c.commit()
+        self.statsChanged.emit()
+
+    def play_stats(self) -> dict[int, tuple[int, float]]:
+        """{track_id: (play_count, last_played)} for every track that has been played."""
+        with closing(self._conn()) as c:
+            rows = c.execute("SELECT track_id, play_count, last_played FROM play_stats").fetchall()
+        return {r[0]: (r[1], r[2] or 0.0) for r in rows}
 
     def tracks(self) -> list[Track]:
         with self._conn() as c:

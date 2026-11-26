@@ -1,4 +1,7 @@
-from PySide6.QtCore import QPoint, QRectF, QSize, Qt, Signal
+import math
+import time
+
+from PySide6.QtCore import QPoint, QRect, QRectF, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QFont, QImage, QLinearGradient, QPainter
 from PySide6.QtWidgets import (QAbstractItemView, QHBoxLayout, QLabel, QMenu, QPushButton,
                                QStyle, QStyledItemDelegate, QVBoxLayout, QWidget)
@@ -8,26 +11,26 @@ from services.cover_service import CoverService
 from ui import theme
 from ui.backdrop import paint_backdrop
 from ui.smooth_scroll import SmoothListView
-from ui.widgets.alpha_index import AlphaIndex
 
 ROW_H = 46
 COVER = 34
 PAD = 12
 FADE_H = 90  # height of the bottom fade in px
-INDEX_W = 22  # width reserved at the right edge for the A-Z index overlay
 SORTS = {"added": "Date added", "title": "Title", "artist": "Artist", "album": "Album"}
 
 
 def columns(w: int) -> dict:
     """Column x-positions as fractions of the row width (shared by header and rows)."""
     return {"title": PAD + COVER + 12, "album": int(w * 0.50), "added": int(w * 0.74),
-            "quality": int(w * 0.82), "time_right": w - INDEX_W - 12}
+            "quality": int(w * 0.82), "time_right": w - 12}
 
 
 class TrackDelegate(QStyledItemDelegate):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.current_id = None
+        self.playing = False    # the equalizer bars only move while music is playing
+        self.cover_rect = None  # where the playing row's cover was last painted (viewport coords), for cheap repaints
         W = QFont.Weight
         self.f_title = theme.font(14, W.DemiBold)
         self.f_sub = theme.font(12)
@@ -62,7 +65,14 @@ class TrackDelegate(QStyledItemDelegate):
             p.setBrush(QColor(0, 0, 0, 90))
             p.drawRoundedRect(QRectF(r.x() + PAD, cy, COVER, COVER), 8, 8)
             p.setBrush(QColor("#ffffff"))
-            for i, h in enumerate((8, 15, 11)):
+            self.cover_rect = QRect(r.x() + PAD, cy, COVER, COVER)
+            now = time.monotonic()
+            for i, still in enumerate((8, 15, 11)):
+                if self.playing:  # each bar bounces at its own pace, so it never looks like a loop of one shape
+                    wave = 0.5 + 0.5 * math.sin(now * (5.2 + 1.7 * i) + i * 2.1)
+                    h = 4 + 12 * wave
+                else:
+                    h = still
                 p.drawRoundedRect(QRectF(r.x() + PAD + 10 + i * 5, cy + (COVER + 15) / 2 - h, 3, h), 1.5, 1.5)
 
         c = columns(r.width())
@@ -143,7 +153,10 @@ class FadeOverlay(QWidget):
         q = QPainter(img)
         off = self.mapTo(central, QPoint(0, 0))
         q.translate(-off.x(), -off.y())
-        paint_backdrop(q, central.width(), central.height())
+        if hasattr(central, "paint_into"):
+            central.paint_into(q)  # exactly what the window paints behind it, tint and pattern included
+        else:
+            paint_backdrop(q, central.width(), central.height())
         q.resetTransform()
 
         # Multiply by a vertical alpha ramp: transparent at the top, opaque at the bottom
@@ -161,21 +174,22 @@ class FadeOverlay(QWidget):
 class SongList(QWidget):
     rowActivated = Signal(int)
 
-    def __init__(self, model: TrackListModel, parent=None):
+    def __init__(self, model: TrackListModel, sorts: dict | None = None, heading: str = "All songs", parent=None):
         super().__init__(parent)
         self.model = model
+        self.sorts = sorts or SORTS
         lay = QVBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(6)
 
         # Section title + Sort / Filter / Select buttons
         top = QHBoxLayout()
-        title = QLabel("All songs")
+        title = QLabel(heading)
         title.setFont(theme.font(22, QFont.Weight.Bold))
         title.setStyleSheet(f"color:{theme.TEXT};")
         top.addWidget(title)
         top.addStretch(1)
-        self.sort_btn = QPushButton("Sort: Date added")
+        self.sort_btn = QPushButton("Sort: " + next(iter(self.sorts.values())))
         self.filter_btn = QPushButton("Filter")
         self.select_btn = QPushButton("Select")
         self.select_btn.setCheckable(True)
@@ -193,6 +207,8 @@ class SongList(QWidget):
         self.view.setModel(model)
         self.delegate = TrackDelegate(self.view)
         self.view.setItemDelegate(self.delegate)
+        self._eq_timer = QTimer(self, interval=40)  # drives the equalizer bars on the playing row
+        self._eq_timer.timeout.connect(self._tick_eq)
         self.view.setUniformItemSizes(True)
         self.view.setMouseTracking(True)
         self.view.setSelectionMode(QAbstractItemView.NoSelection)
@@ -208,14 +224,9 @@ class SongList(QWidget):
         self.fade = FadeOverlay(self)
         self.fade.raise_()
 
-        # A-Z index overlays the right edge of the list, so the content keeps one shared right edge
-        self.alpha = AlphaIndex(self)
-        self.alpha.letterClicked.connect(self.jump_to_letter)
-        self.alpha.raise_()
-
         # Sort menu
         sort_menu = QMenu(self)
-        for key, label in SORTS.items():
+        for key, label in self.sorts.items():
             sort_menu.addAction(label, lambda k=key: self._set_sort(k))
         self.sort_btn.setMenu(sort_menu)
 
@@ -228,15 +239,21 @@ class SongList(QWidget):
 
     def resizeEvent(self, e):
         super().resizeEvent(e)
-        # Keep the fade pinned to the bottom of the list view, and the index along its right edge
+        # Keep the fade pinned to the bottom of the list view
         v = self.view.geometry()
         self.fade.setGeometry(v.x(), v.bottom() - FADE_H + 1, v.width(), FADE_H)
-        self.alpha.setGeometry(v.right() - INDEX_W + 1, v.y() + 8, INDEX_W, max(0, v.height() - FADE_H // 2 - 8))
-        self.alpha.raise_()
+
+    def reset(self, sort_key: str):
+        """Back to a clean view: no filter, no selection, the given sort."""
+        self.select_btn.setChecked(False)
+        self.model.set_query("")
+        self.model.set_formats(set())
+        self.filter_btn.setText("Filter")
+        self._set_sort(sort_key)
 
     def _set_sort(self, key: str):
         self.model.set_sort(key)
-        self.sort_btn.setText(f"Sort: {SORTS[key]}")
+        self.sort_btn.setText(f"Sort: {self.sorts[key]}")
 
     def _build_filter_menu(self):
         self.filter_menu.clear()
@@ -265,15 +282,23 @@ class SongList(QWidget):
         if not on:
             self.view.clearSelection()
 
+    def set_playing(self, playing: bool):
+        """Equalizer bars on the current row move while music plays and freeze when it is paused."""
+        self.delegate.playing = playing
+        if playing:
+            self._eq_timer.start()
+        else:
+            self._eq_timer.stop()
+        self.view.viewport().update()
+
+    def _tick_eq(self):
+        # Repaint only the cover of the playing row. The delegate re-arms cover_rect whenever that row is painted,
+        # so nothing is repainted (and the timer costs nothing) while the row is scrolled out of view.
+        rect, self.delegate.cover_rect = self.delegate.cover_rect, None
+        if rect is not None:
+            self.view.viewport().update(rect)
+
     def set_current(self, track_id):
         """Highlight the row of the currently playing track."""
         self.delegate.current_id = track_id
         self.view.viewport().update()
-
-    def jump_to_letter(self, letter: str):
-        """Scroll to the first title starting with `letter` (switches to title sort if needed)."""
-        if self.model.sort_key != "title":
-            self._set_sort("title")
-        row = self.model.first_row_for_letter(letter)
-        if row >= 0:
-            self.view.scroll_to(row * ROW_H)  # rows are uniform, so this puts the row at the top (and glides there)

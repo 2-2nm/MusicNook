@@ -113,8 +113,8 @@ class Sidebar(Card):
         self._group = QButtonGroup(self)
         self.nav_library = NavItem("grid", "Library")
         self.nav_now = NavItem("wave", "Now playing")
-        self.nav_queue = NavItem("queue", "Queue")
-        for i, item in enumerate((self.nav_library, self.nav_now, self.nav_queue)):
+        self.nav_playlists = NavItem("playlist", "Playlists")
+        for i, item in enumerate((self.nav_library, self.nav_now, self.nav_playlists)):
             self._group.addButton(item, i)
             lay.addWidget(item)
         self.nav_library.setChecked(True)
@@ -131,9 +131,9 @@ class Sidebar(Card):
         lay.addWidget(appearance)
         self._sync_labels()
 
-    def set_counts(self, library: int, queue: int):
+    def set_counts(self, library: int, playlists: int):
         self.nav_library.set_count(library)
-        self.nav_queue.set_count(queue)
+        self.nav_playlists.set_count(playlists)
 
     def _sync_labels(self):
         self.title.setVisible(self.width() > LABELS_MIN_W)

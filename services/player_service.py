@@ -12,6 +12,7 @@ class PlayerService(QObject):
     durationChanged = Signal(int)
     playingChanged = Signal(bool)
     volumeChanged = Signal(float)
+    modesChanged = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -21,6 +22,9 @@ class PlayerService(QObject):
         self._queue: list[Track] = []
         self._index = -1
         self._pending_seek: int | None = None
+        self._shuffle = False
+        self._repeat = "off"  # off | all | one
+        self._orig: list[Track] = []  # queue order before shuffling
         self._player.positionChanged.connect(lambda v: self.positionChanged.emit(int(v)))
         self._player.durationChanged.connect(lambda v: self.durationChanged.emit(int(v)))
         self._player.playbackStateChanged.connect(
@@ -36,6 +40,18 @@ class PlayerService(QObject):
     def queue(self) -> list[Track]:
         return self._queue
 
+    @property
+    def index(self) -> int:
+        return self._index
+
+    @property
+    def shuffle(self) -> bool:
+        return self._shuffle
+
+    @property
+    def repeat(self) -> str:
+        return self._repeat
+
     def position(self) -> int:
         return self._player.position()
 
@@ -47,7 +63,18 @@ class PlayerService(QObject):
 
     # --- control ---
     def play_queue(self, tracks: list[Track], index: int = 0):
+        self._orig = []
         self._queue = list(tracks)
+        if self._shuffle and 0 <= index < len(self._queue):
+            self._orig = list(self._queue)
+            picked = self._queue.pop(index)
+            random.shuffle(self._queue)
+            self._queue.insert(0, picked)
+            index = 0
+        self._load(index, autoplay=True)
+
+    def play_index(self, index: int):
+        """Jump to a position of the current queue without touching its order."""
         self._load(index, autoplay=True)
 
     def shuffle_all(self, tracks: list[Track]):
@@ -83,6 +110,8 @@ class PlayerService(QObject):
     def next(self):
         if self._index + 1 < len(self._queue):
             self._load(self._index + 1, autoplay=True)
+        elif self._repeat == "all" and self._queue:
+            self._load(0, autoplay=True)
         else:
             self._player.stop()
 
@@ -106,6 +135,34 @@ class PlayerService(QObject):
     def volume(self) -> float:
         return self._audio.volume()
 
+    def set_shuffle(self, on: bool):
+        if on == self._shuffle:
+            return
+        self._shuffle = on
+        cur = self.current
+        if on:
+            self._orig = list(self._queue)
+            start = self._index + 1 if cur else 0
+            rest = self._queue[start:]
+            random.shuffle(rest)
+            self._queue[start:] = rest
+        elif self._orig:
+            self._queue = self._orig
+            self._orig = []
+            if cur:
+                self._index = next((i for i, t in enumerate(self._queue) if t.id == cur.id), self._index)
+        self.modesChanged.emit()
+
+    def cycle_repeat(self):
+        self._repeat = {"off": "all", "all": "one", "one": "off"}[self._repeat]
+        self.modesChanged.emit()
+
     def _on_status(self, status):
         if status == QMediaPlayer.MediaStatus.LoadedMedia and self._pending_seek is not None:
             self._player.setPosition(self._pending_seek)
+        elif status == QMediaPlayer.MediaStatus.EndOfMedia:
+            if self._repeat == "one":
+                self.seek_ms(0)
+                self._player.play()
+            else:
+                self.next()

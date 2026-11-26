@@ -1,10 +1,31 @@
 from PySide6.QtCore import QRectF, Qt, Signal
 from PySide6.QtGui import QColor, QFont, QPainter
-from PySide6.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout
+from PySide6.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
 from ui import theme
+from ui.icons import draw_icon
 from ui.widgets.common import Card, CoverLabel, ElidedLabel, IconButton, PlayButton
+from ui.now_playing.waveform import WaveformSeek
 from ui.widgets.progress_bar import ProgressBar
+
+
+class VolumeIcon(QWidget):
+    """Speaker icon that tells what the white slider next to it is for; it shows the level (muted / low / high)."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFixedSize(22, 22)
+        self._name = "volume"
+
+    def set_level(self, v: float):
+        name = "volume_mute" if v <= 0.001 else "volume_low" if v < 0.5 else "volume"
+        if name != self._name:
+            self._name = name
+            self.update()
+
+    def paintEvent(self, e):
+        p = QPainter(self)
+        draw_icon(p, self._name, QRectF(self.rect()), theme.MUTED)
 
 
 class MiniPlayer(Card):
@@ -13,11 +34,14 @@ class MiniPlayer(Card):
     toggleClicked = Signal()
     seekRequested = Signal(float)
     volumeChanged = Signal(float)
+    openRequested = Signal()  # a click on the player itself (not on one of its controls)
     radius = 30
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setFixedHeight(76)
+        self.setCursor(Qt.PointingHandCursor)
+        self._pressed = False
         lay = QHBoxLayout(self)
         lay.setContentsMargins(16, 0, 24, 0)
         lay.setSpacing(14)
@@ -50,16 +74,33 @@ class MiniPlayer(Card):
         for l in (self.t_cur, self.t_tot):
             l.setFont(theme.font(14))
             l.setStyleSheet(f"color:{theme.MUTED};")
-        self.bar = ProgressBar()
+        self.bar = WaveformSeek(36)  # same waveform as the Now playing page
         self.bar.seekRequested.connect(self.seekRequested)
         lay.addWidget(self.t_cur)
         lay.addWidget(self.bar, 5)
         lay.addWidget(self.t_tot)
 
+        self.vol_icon = VolumeIcon()
         self.volume = ProgressBar("#ffffff", "#ffffff")
         self.volume.setFixedWidth(100)
         self.volume.seekRequested.connect(self.volumeChanged)
-        lay.addWidget(self.volume)
+        vol = QHBoxLayout()
+        vol.setSpacing(8)
+        vol.addWidget(self.vol_icon)
+        vol.addWidget(self.volume)
+        lay.addLayout(vol)
+
+    # Buttons, the waveform and the volume slider take their own clicks; labels and the cover ignore the mouse,
+    # so a click on those (or on the empty parts of the card) arrives here and opens the Now playing page.
+    def mousePressEvent(self, e):
+        self._pressed = e.button() == Qt.LeftButton
+        super().mousePressEvent(e)
+
+    def mouseReleaseEvent(self, e):
+        if self._pressed and e.button() == Qt.LeftButton and self.rect().contains(e.position().toPoint()):
+            self.openRequested.emit()
+        self._pressed = False
+        super().mouseReleaseEvent(e)
 
     def paint_background(self, p: QPainter, r: QRectF):
         p.setBrush(QColor(14, 16, 28, 235))
@@ -68,6 +109,7 @@ class MiniPlayer(Card):
 
     def set_track(self, track):
         self.cover.set_track(track)
+        self.bar.set_track(track)
         self.title.setText(track.title)
         self.artist.setText(track.artist)
 
@@ -81,3 +123,4 @@ class MiniPlayer(Card):
 
     def set_volume(self, v: float):
         self.volume.set_value(v)
+        self.vol_icon.set_level(v)
