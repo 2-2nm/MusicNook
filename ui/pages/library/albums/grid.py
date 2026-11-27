@@ -1,4 +1,6 @@
-from PySide6.QtCore import QRectF, Qt, Signal
+import traceback
+
+from PySide6.QtCore import QRectF, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QFont, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import QWidget
 
@@ -38,13 +40,23 @@ class AlbumTile(QWidget):
         self.update()
 
     def paintEvent(self, e):
+        # The painter is always ended: an exception in here must not leave it open on the window's backing store
+        # (that is what froze the app and spammed "Painter not active").
         p = QPainter(self)
+        try:
+            self._paint(p)
+        except Exception:
+            traceback.print_exc()
+        finally:
+            p.end()
+
+    def _paint(self, p: QPainter):
         p.setRenderHint(QPainter.Antialiasing)
         p.setRenderHint(QPainter.SmoothPixmapTransform)
         s = self.width()
         inset = 3 if self.selected else 0  # the ring sits outside the cover
         cover = QRectF(inset, inset, s - 2 * inset, s - 2 * inset)
-        pm = CoverRenderer.pixmap(self.album.tracks[0], int(cover.width()), RADIUS)
+        pm = CoverRenderer.pixmap_async(self.album.tracks[0], int(cover.width()), RADIUS)
         p.drawPixmap(cover.toRect(), pm)
         if self._hover and not self.selected:
             clip = QPainterPath()
@@ -78,14 +90,21 @@ class AlbumGrid(QWidget):
         super().__init__(parent)
         self._tiles: list[AlbumTile] = []
         self.setAutoFillBackground(False)
+        # Covers arrive from background threads in bursts: repaint once per burst, not once per cover.
+        self._repaint = QTimer(self, singleShot=True, interval=40)
+        self._repaint.timeout.connect(self.update)
+        CoverRenderer.signals().ready.connect(self._repaint.start)
 
     def set_tiles(self, tiles: list):
+        keep = {id(t) for t in tiles}
         for t in self._tiles:
-            t.setParent(None)
-            t.deleteLater()
+            if id(t) not in keep:  # tiles that stay are reused as they are
+                t.hide()
+                t.deleteLater()
         self._tiles = tiles
         for t in tiles:
-            t.setParent(self)
+            if t.parentWidget() is not self:
+                t.setParent(self)
             t.show()
         self._layout()
 

@@ -1,0 +1,9 @@
+11/27/2026 (0.1.42)
+- added "Albums" tab in the library
+- i change the module
+- you can drag the vinyl to seek or back
+- crash when scroll the albums until the bottom (fixed)
+
+11/26/2026 (0.1.26)
+- working on it
+- the library, player and playlist have done (basic)

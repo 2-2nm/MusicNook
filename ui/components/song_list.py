@@ -1,5 +1,6 @@
 import math
 import time
+import traceback
 
 from PySide6.QtCore import QPoint, QRect, QRectF, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QFont, QImage, QLinearGradient, QPainter
@@ -158,35 +159,45 @@ class FadeOverlay(QWidget):
         self.setAttribute(Qt.WA_TransparentForMouseEvents)
 
     def paintEvent(self, e):
-        central = self.window().centralWidget()
-        if central is None:
+        w, h = self.width(), self.height()
+        central = self.window().centralWidget() if hasattr(self.window(), "centralWidget") else None
+        if central is None or w <= 0 or h <= 0:
             return
         dpr = self.devicePixelRatioF()
-        w, h = self.width(), self.height()
 
         # Render the matching slice of the backdrop into an offscreen image
-        img = QImage(int(w * dpr), int(h * dpr), QImage.Format_ARGB32_Premultiplied)
+        img = QImage(max(1, int(w * dpr)), max(1, int(h * dpr)), QImage.Format_ARGB32_Premultiplied)
+        if img.isNull():
+            return
         img.setDevicePixelRatio(dpr)
         img.fill(0)
         q = QPainter(img)
-        off = self.mapTo(central, QPoint(0, 0))
-        q.translate(-off.x(), -off.y())
-        if hasattr(central, "paint_into"):
-            central.paint_into(q)  # exactly what the window paints behind it, tint and pattern included
-        else:
-            paint_backdrop(q, central.width(), central.height())
-        q.resetTransform()
+        try:
+            off = self.mapTo(central, QPoint(0, 0))
+            q.translate(-off.x(), -off.y())
+            if hasattr(central, "paint_into"):
+                central.paint_into(q)  # exactly what the window paints behind it, tint and pattern included
+            else:
+                paint_backdrop(q, central.width(), central.height())
+            q.resetTransform()
 
-        # Multiply by a vertical alpha ramp: transparent at the top, opaque at the bottom
-        q.setCompositionMode(QPainter.CompositionMode_DestinationIn)
-        g = QLinearGradient(0, 0, 0, h)
-        g.setColorAt(0.0, QColor(0, 0, 0, 0))
-        g.setColorAt(0.55, QColor(0, 0, 0, 150))
-        g.setColorAt(1.0, QColor(0, 0, 0, 255))
-        q.fillRect(QRectF(0, 0, w, h), g)
-        q.end()
+            # Multiply by a vertical alpha ramp: transparent at the top, opaque at the bottom
+            q.setCompositionMode(QPainter.CompositionMode_DestinationIn)
+            g = QLinearGradient(0, 0, 0, h)
+            g.setColorAt(0.0, QColor(0, 0, 0, 0))
+            g.setColorAt(0.55, QColor(0, 0, 0, 150))
+            g.setColorAt(1.0, QColor(0, 0, 0, 255))
+            q.fillRect(QRectF(0, 0, w, h), g)
+        except Exception:
+            traceback.print_exc()
+        finally:
+            q.end()
 
-        QPainter(self).drawImage(0, 0, img)
+        p = QPainter(self)
+        try:
+            p.drawImage(0, 0, img)
+        finally:
+            p.end()
 
 
 class SongList(QWidget):

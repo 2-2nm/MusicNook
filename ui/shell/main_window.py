@@ -185,7 +185,8 @@ class MainWindow(WindowStateMixin, QMainWindow):
         av.queueRequested.connect(p.enqueue)
         self.sidebar.addFolderRequested.connect(self.add_folder)
         self.library.statsChanged.connect(self._refresh_smart)
-        self.library.changed.connect(lambda: self._reload_timer.start())
+        # `changed` is also emitted by the scan / backfill threads: queue it so the timer is started in the GUI thread
+        self.library.changed.connect(self._schedule_reload, Qt.QueuedConnection)
 
     def _wire_playlists(self):
         pp, cp = self.playlists_page, self.collection_page
@@ -209,6 +210,9 @@ class MainWindow(WindowStateMixin, QMainWindow):
         self.sidebar.pageSelected.connect(self._on_page)
 
     # ---------- data ----------
+    def _schedule_reload(self):
+        self._reload_timer.start()
+
     def reload(self):
         self._all = self.library.tracks()
         self.model.set_tracks(self._all)

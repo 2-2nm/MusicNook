@@ -61,6 +61,8 @@ class AlbumsView(QWidget):
 
     # ---------- data ----------
     def set_albums(self, albums: list):
+        if albums == self._albums and self.grid.tiles():
+            return  # nothing changed (a background scan reloads the library often): keep the tiles
         self._albums = albums
         self._rebuild()
 
@@ -79,10 +81,13 @@ class AlbumsView(QWidget):
 
     def _rebuild(self):
         shown = self.shown()
+        old = {t.album.key: t for t in self.grid.tiles()}
         tiles = []
         for a in shown:
-            t = AlbumTile(a)
-            t.clicked.connect(self._select)
+            t = old.get(a.key)
+            if t is None or t.album != a:  # an album that did not change keeps its tile
+                t = AlbumTile(a)
+                t.clicked.connect(self._select)
             tiles.append(t)
         self.grid.set_tiles(tiles)
         keys = {a.key for a in shown}
