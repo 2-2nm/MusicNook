@@ -1,38 +1,25 @@
 import os
-import sqlite3
 import time
 from contextlib import closing
-from pathlib import Path
 
 from PySide6.QtCore import QObject, Qt, Signal
 from PySide6.QtGui import QImage
 
-from models.playlist import Playlist
+from data.db import Database
+from domain.playlist import Playlist
 
 
 class PlaylistService(QObject):
     """User playlists, stored in the same SQLite file as the library."""
     changed = Signal()
 
-    def __init__(self, db_path: str, parent=None):
+    def __init__(self, db: Database, parent=None):
         super().__init__(parent)
-        self.db_path = db_path
-        self.covers_dir = Path(db_path).parent / "covers"
-        with closing(self._conn()) as c:
-            c.execute("""CREATE TABLE IF NOT EXISTS playlists(
-                id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, created REAL)""")
-            cols = {r[1] for r in c.execute("PRAGMA table_info(playlists)")}  # upgrade older databases
-            if "description" not in cols:
-                c.execute("ALTER TABLE playlists ADD COLUMN description TEXT NOT NULL DEFAULT ''")
-            if "cover" not in cols:
-                c.execute("ALTER TABLE playlists ADD COLUMN cover TEXT NOT NULL DEFAULT ''")
-            c.execute("""CREATE TABLE IF NOT EXISTS playlist_tracks(
-                playlist_id INTEGER, track_id INTEGER, position INTEGER,
-                PRIMARY KEY(playlist_id, track_id))""")
-            c.commit()
+        self._db = db
+        self.covers_dir = db.covers_dir
 
     def _conn(self):
-        return sqlite3.connect(self.db_path)
+        return self._db.connect()
 
     def all(self) -> list[Playlist]:
         with closing(self._conn()) as c:

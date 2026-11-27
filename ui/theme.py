@@ -1,6 +1,8 @@
 from datetime import datetime
 
-from PySide6.QtGui import QFont
+from pathlib import Path
+
+from PySide6.QtGui import QFont, QFontDatabase
 
 BG = "#070810"
 TEXT = "#f3f5ff"
@@ -11,9 +13,19 @@ GRAD_A = "#4f7bff"
 GRAD_B = "#a77bff"
 
 
+FAMILY = "Poppins"
+FONT_DIR = Path(__file__).resolve().parent.parent / "assets" / "fonts"
+
+
+def load_fonts() -> None:
+    """Register the bundled fonts; call once after QApplication is created, before any widget."""
+    for f in sorted(FONT_DIR.glob("*.ttf")):
+        QFontDatabase.addApplicationFont(str(f))
+
+
 def font(px: int, weight=QFont.Weight.Normal, spacing: float = 0.0) -> QFont:
     f = QFont()
-    f.setFamilies(["Inter", "Segoe UI", "Arial"])
+    f.setFamilies([FAMILY, "Inter", "Segoe UI", "Arial"])
     f.setPixelSize(px)
     f.setWeight(weight)
     if spacing:

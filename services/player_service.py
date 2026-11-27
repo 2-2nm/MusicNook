@@ -3,7 +3,7 @@ import random
 from PySide6.QtCore import QObject, QUrl, Signal
 from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
 
-from models.track import Track
+from domain.track import Track
 
 
 class PlayerService(QObject):
@@ -45,6 +45,11 @@ class PlayerService(QObject):
         return self._index
 
     @property
+    def orig_queue(self) -> list[Track]:
+        """The queue in its order before shuffling (empty while shuffle is off)."""
+        return self._orig
+
+    @property
     def shuffle(self) -> bool:
         return self._shuffle
 
@@ -73,6 +78,17 @@ class PlayerService(QObject):
             index = 0
         self._load(index, autoplay=True)
 
+    def enqueue(self, tracks: list[Track]):
+        """Add songs to the end of the queue (starts playing them when nothing is queued)."""
+        if not tracks:
+            return
+        if not self._queue or self._index < 0:
+            self.play_queue(tracks, 0)
+            return
+        self._queue.extend(tracks)
+        if self._orig:
+            self._orig.extend(tracks)
+
     def play_index(self, index: int):
         """Jump to a position of the current queue without touching its order."""
         self._load(index, autoplay=True)
@@ -83,9 +99,15 @@ class PlayerService(QObject):
         if q:
             self.play_queue(q, 0)
 
-    def restore(self, tracks: list[Track], index: int, position_ms: int):
+    def restore(self, tracks: list[Track], index: int, position_ms: int,
+                orig: list[Track] | None = None, shuffle: bool = False, repeat: str = "off"):
+        """Bring back the queue of the last session (same order, shuffle and repeat), paused at `position_ms`."""
         self._queue = list(tracks)
+        self._orig = list(orig) if (shuffle and orig) else []
+        self._shuffle = shuffle and bool(self._orig)  # shuffle without its original order could not be undone
+        self._repeat = repeat if repeat in ("off", "all", "one") else "off"
         self._load(index, autoplay=False, seek=position_ms)
+        self.modesChanged.emit()
 
     def _load(self, index: int, autoplay: bool, seek: int = 0):
         if not (0 <= index < len(self._queue)):
