@@ -9,12 +9,13 @@ from ui import theme
 #   main glow:   centre x, centre y (fractions of the window), radius x (fraction of w), radius y (fraction of h),
 #                alpha; radius None = round, 0.55 * max(w, h)
 #   second hue:  centre x, centre y, radius (fraction of max(w, h)), alpha
-LIBRARY, PLAYER, PLAYLISTS, COLLECTION = 0, 1, 2, 3  # pattern indices (the page numbers of the main window)
+LIBRARY, PLAYER, PLAYLISTS, COLLECTION, FOLDERS = 0, 1, 2, 3, 4  # pattern indices (the page numbers of the main window)
 PATTERNS = (
     ((0.38, 0.17, 0.62, 0.42, 140), (0.92, 0.12, 0.30, 80)),   # Library: wide, top, next to "Continue listening"
     ((0.30, 0.40, None, None, 150), (0.85, 0.95, 0.40, 90)),   # Player: round spotlight in the middle
     ((0.15, 0.85, 0.62, 0.42, 140), (0.92, 0.10, 0.26, 80)),   # Playlists: wide, bottom left
     ((0.18, 0.14, 0.50, 0.34, 150), (0.95, 0.35, 0.28, 80)),   # one playlist: behind the header, top left
+    ((0.30, 0.22, 0.58, 0.38, 140), (0.90, 0.88, 0.30, 80)),   # Folders: top left, a second glow bottom right
 )
 
 
@@ -68,13 +69,14 @@ def paint_backdrop(p, w: int, h: int, tint=None, mode=1.0, strength: float = 1.0
     of PATTERNS; weights in between blend two patterns, so changing page glides); `strength` fades the whole
     tint in or out."""
     p.fillRect(0, 0, w, h, QColor(theme.BG))
-    g = QRadialGradient(w * 0.12, 0, w * 0.75)
-    g.setColorAt(0, QColor(32, 52, 170, 230))
-    g.setColorAt(1, QColor(32, 52, 170, 0))
+    # Mostly black: only a faint purple haze at the top and one in the bottom-left corner (the blue wash is gone).
+    g = QRadialGradient(w * 0.62, 0, w * 0.45)
+    g.setColorAt(0, QColor(74, 34, 130, 120))
+    g.setColorAt(1, QColor(74, 34, 130, 0))
     p.fillRect(0, 0, w, h, g)
-    g2 = QRadialGradient(w, h, w * 0.55)
-    g2.setColorAt(0, QColor(110, 40, 160, 150))
-    g2.setColorAt(1, QColor(110, 40, 160, 0))
+    g2 = QRadialGradient(0, h, w * 0.5)
+    g2.setColorAt(0, QColor(96, 42, 150, 110))
+    g2.setColorAt(1, QColor(96, 42, 150, 0))
     p.fillRect(0, 0, w, h, g2)
     if tint is None or strength <= 0:
         return

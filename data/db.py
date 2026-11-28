@@ -39,4 +39,7 @@ class Database:
             c.execute("""CREATE TABLE IF NOT EXISTS playlist_tracks(
                 playlist_id INTEGER, track_id INTEGER, position INTEGER,
                 PRIMARY KEY(playlist_id, track_id))""")
+            c.execute("""CREATE TABLE IF NOT EXISTS folders(
+                id INTEGER PRIMARY KEY AUTOINCREMENT, path TEXT NOT NULL, kind TEXT NOT NULL, added REAL,
+                UNIQUE(path, kind))""")
             c.commit()

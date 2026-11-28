@@ -5,6 +5,7 @@ from PySide6.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout, QWidget
 from ui import theme
 from ui.icons import draw_icon
 from ui.components.common import Card, CoverLabel, ElidedLabel, IconButton, PlayButton
+from ui.pages.now_playing.controls import ModeButton
 from ui.pages.now_playing.waveform import WaveformSeek
 from ui.components.progress_bar import ProgressBar
 
@@ -32,6 +33,8 @@ class MiniPlayer(Card):
     prevClicked = Signal()
     nextClicked = Signal()
     toggleClicked = Signal()
+    shuffleClicked = Signal()
+    repeatClicked = Signal()
     seekRequested = Signal(float)
     volumeChanged = Signal(float)
     openRequested = Signal()  # a click on the player itself (not on one of its controls)
@@ -66,9 +69,15 @@ class MiniPlayer(Card):
         prev.clicked.connect(self.prevClicked)
         nxt.clicked.connect(self.nextClicked)
         self.play_btn.clicked.connect(self.toggleClicked)
-        lay.addWidget(prev)
-        lay.addWidget(self.play_btn)
-        lay.addWidget(nxt)
+        # Same order as on the Player page: shuffle, previous, play, next, repeat
+        self.shuffle_btn, self.repeat_btn = ModeButton("shuffle"), ModeButton("repeat")
+        self.shuffle_btn.clicked.connect(self.shuffleClicked)
+        self.repeat_btn.clicked.connect(self.repeatClicked)
+        ctl = QHBoxLayout()
+        ctl.setSpacing(4)
+        for w in (self.shuffle_btn, prev, self.play_btn, nxt, self.repeat_btn):
+            ctl.addWidget(w)
+        lay.addLayout(ctl)
 
         self.t_cur, self.t_tot = QLabel("0:00"), QLabel("0:00")
         for l in (self.t_cur, self.t_tot):
@@ -115,6 +124,11 @@ class MiniPlayer(Card):
 
     def set_playing(self, v: bool):
         self.play_btn.set_playing(v)
+
+    def set_modes(self, shuffle: bool, repeat: str):
+        """repeat: off | all | one (same states as the Player page)."""
+        self.shuffle_btn.set_state(shuffle)
+        self.repeat_btn.set_state(repeat != "off", repeat == "one")
 
     def set_progress(self, pos_ms: int, dur_ms: int):
         self.t_cur.setText(theme.fmt_time(pos_ms))

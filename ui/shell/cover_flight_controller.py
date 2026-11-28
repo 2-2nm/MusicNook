@@ -50,7 +50,10 @@ class CoverFlightController:
         via_mini, self.via_mini = self.via_mini, False
 
         def list_cover(page):  # the cover the flight starts from / ends at on the other pages
-            return mini.cover if (via_mini or page != Page.LIBRARY) else w.card.cover
+            # The Continue listening card exists on the Library's Songs tab only; on Albums / Artists (and on
+            # Playlists) the cover flies to / from the mini player at the bottom.
+            on_songs = page == Page.LIBRARY and getattr(w, "_lib_tab", 0) == 0
+            return w.card.cover if on_songs and not via_mini else mini.cover
 
         def stage_rect():
             r, radius = stage.cover_rect()

@@ -8,6 +8,7 @@ except ImportError:  # pragma: no cover
     mutagen = None
 
 _quality_cache: dict[str, str] = {}
+finder = None  # set by the window: finder(path, title, artist) -> path of the .lrc file or None (lyrics folders)
 _STAMP = re.compile(r"\[(\d+):(\d+(?:[.:]\d+)?)\]")
 
 
@@ -37,9 +38,15 @@ def quality(track) -> str:
     return text
 
 
-def load_lyrics(path: str) -> list[tuple[int, str]]:
-    """Synced lyrics from a .lrc file with the same name next to the song. Returns [(ms, text)]."""
-    p = Path(path).with_suffix(".lrc")
+def load_lyrics(path: str, title: str = "", artist: str = "") -> list[tuple[int, str]]:
+    """Synced lyrics from a .lrc file: next to the song or in a lyrics folder. Returns [(ms, text)]."""
+    found = None
+    if finder is not None:
+        try:
+            found = finder(path, title, artist)
+        except Exception:
+            found = None
+    p = Path(found) if found else Path(path).with_suffix(".lrc")
     if not p.is_file():
         return []
     try:

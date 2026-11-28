@@ -75,6 +75,12 @@ class AlbumsView(QWidget):
     def set_current(self, track_id):
         self.detail.set_current(track_id)
 
+    def select_key(self, key: str):
+        """Select an album from outside (e.g. from the Artists tab). Ignored when a search hides it."""
+        if any(a.key == key for a in self.shown()):
+            self._selected = key
+            self._apply_selection()
+
     def shown(self) -> list:
         q = self._query
         return [a for a in self._albums if not q or q in a.title.casefold() or q in a.artist.casefold()]

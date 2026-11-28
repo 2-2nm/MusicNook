@@ -7,3 +7,4 @@ class Page(IntEnum):
     PLAYER = 1
     PLAYLISTS = 2
     COLLECTION = 3   # one playlist or smart collection
+    FOLDERS = 4      # music / lyrics folders

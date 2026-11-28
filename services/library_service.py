@@ -8,6 +8,7 @@ from pathlib import Path
 from PySide6.QtCore import QObject, QTimer, Signal
 
 from data.db import Database
+from domain.folder import is_under, norm
 from domain.track import Track
 
 try:
@@ -97,8 +98,34 @@ class LibraryService(QObject):
     def _start_backfill(self):
         threading.Thread(target=self._backfill, daemon=True).start()
 
+    def _merge_duplicate_paths(self) -> int:
+        """Older versions could add one file twice (C:/Music/a.mp3 and C:\\Music\\a.mp3 are the same file).
+        The oldest row stays; play counts and playlist entries of the others move to it."""
+        with closing(self._conn()) as c:
+            first: dict[str, int] = {}
+            dups: list[tuple[int, int]] = []
+            for tid, path in c.execute("SELECT id, path FROM tracks ORDER BY id").fetchall():
+                k = norm(path)
+                if k in first:
+                    dups.append((tid, first[k]))
+                else:
+                    first[k] = tid
+            for old, keep in dups:
+                c.execute("UPDATE OR IGNORE play_stats SET track_id=? WHERE track_id=?", (keep, old))
+                c.execute("DELETE FROM play_stats WHERE track_id=?", (old,))
+                c.execute("UPDATE OR IGNORE playlist_tracks SET track_id=? WHERE track_id=?", (keep, old))
+                c.execute("DELETE FROM playlist_tracks WHERE track_id=?", (old,))
+                c.execute("DELETE FROM tracks WHERE id=?", (old,))
+            c.commit()
+        return len(dups)
+
     def _backfill(self):
         """Read year / genre once for tracks that predate those columns. Only the tags are re-read."""
+        try:
+            if self._merge_duplicate_paths():
+                self.changed.emit()
+        except Exception:
+            pass
         try:
             with closing(self._conn()) as c:
                 todo = c.execute("SELECT id, path FROM tracks WHERE year IS NULL").fetchall()
@@ -139,6 +166,26 @@ class LibraryService(QObject):
                             "COALESCE(year,0),COALESCE(genre,'') FROM tracks").fetchall()
         return [Track(*r) for r in rows if os.path.exists(r[1])]
 
+    @property
+    def scanning(self) -> bool:
+        return self._scanning
+
+    def remove_under(self, folder: str, keep=()) -> int:
+        """Takes the songs of a folder out of the library (the files stay on disk). Songs that also lie inside one of
+        the `keep` folders stay. Their play counts and playlist entries go with them. Returns how many were removed."""
+        with closing(self._conn()) as c:
+            rows = c.execute("SELECT id, path FROM tracks").fetchall()
+            ids = [i for i, p in rows if is_under(p, folder) and not any(is_under(p, k) for k in keep)]
+            for n in range(0, len(ids), 500):
+                part = ids[n:n + 500]
+                marks = ",".join("?" * len(part))
+                c.execute(f"DELETE FROM tracks WHERE id IN ({marks})", part)
+                c.execute(f"DELETE FROM play_stats WHERE track_id IN ({marks})", part)
+                c.execute(f"DELETE FROM playlist_tracks WHERE track_id IN ({marks})", part)
+            c.commit()
+        self.changed.emit()
+        return len(ids)
+
     def scan(self, folder: str):
         if self._scanning:
             return
@@ -149,7 +196,7 @@ class LibraryService(QObject):
         added = 0
         try:
             conn = self._conn()
-            known = {r[0] for r in conn.execute("SELECT path FROM tracks")}
+            known = {norm(r[0]) for r in conn.execute("SELECT path FROM tracks")}  # C:/x and C:\\x are the same file
             batch = 0
             for root, _, files in os.walk(folder):
                 for name in files:
@@ -157,7 +204,7 @@ class LibraryService(QObject):
                     if ext not in AUDIO_EXT:
                         continue
                     path = os.path.join(root, name)
-                    if path in known:
+                    if norm(path) in known:
                         continue
                     title, artist, album, dur, year, genre = read_meta(path, Path(name).stem, "Unknown Artist", "Unknown Album")
                     conn.execute("INSERT OR IGNORE INTO tracks(path,title,artist,album,added,fmt,duration,year,genre) VALUES(?,?,?,?,?,?,?,?,?)",

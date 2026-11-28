@@ -3,6 +3,7 @@ import re
 import time
 
 from domain.album import Album
+from domain.artist import Artist
 from services.library_service import LibraryService
 
 # Smart collections, in the order of the cards: Favourites, Recently played, Most played, Recently added
@@ -73,6 +74,20 @@ class CollectionService:
             year = next((t.year for t in ts if t.year), 0)
             out.append(Album(key, ts[0].album, ts[0].artist, year, tuple(ts), max(t.added for t in ts)))
         out.sort(key=lambda a: (a.title.casefold(), a.artist.casefold()))
+        return out
+
+    @staticmethod
+    def artists(albums: list) -> list[Artist]:
+        """Every artist of the library, A-Z. Albums newest year first (unknown year last)."""
+        groups: dict[str, list] = {}
+        for a in albums:
+            groups.setdefault((a.artist or "").strip().casefold(), []).append(a)
+        out = []
+        for key, als in groups.items():
+            als.sort(key=lambda a: (a.year == 0, -a.year, a.title.casefold()))
+            name = (als[0].artist or "").strip() or "Unknown artist"
+            out.append(Artist(key, name, tuple(als), tuple(t for a in als for t in a.tracks)))
+        out.sort(key=lambda a: a.name.casefold())
         return out
 
     @staticmethod

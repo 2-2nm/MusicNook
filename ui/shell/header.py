@@ -10,6 +10,7 @@ from ui.components.segmented import SegmentedTabs
 from ui.components.window_controls import WindowControls
 
 PILL_H = 42  # shared height of the tab pill, the search box and the caption pill
+TAB_SHIFT_LEFT = 40  # px the tab capsule sits left of the exact middle of the header (0 = centered)
 
 
 class SearchIcon(QWidget):
@@ -83,7 +84,12 @@ class LibraryHeader(QWidget):
         lay = QHBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
 
-        left = QVBoxLayout()
+        # Left and right groups get the same stretch, so the tab capsule always sits in the exact middle
+        # of the free space, whatever the subtitle says ("96 albums" vs "1200 songs . 80 h 3 m").
+        left_w = QWidget()
+        left_w.setProperty("dragRegion", True)  # empty space in the bar still drags the window
+        left = QVBoxLayout(left_w)
+        left.setContentsMargins(0, 0, 0, 0)
         left.setSpacing(0)
         self.title = title = QLabel("Library")
         title.setFont(theme.font(34, QFont.Weight.Bold))
@@ -93,15 +99,21 @@ class LibraryHeader(QWidget):
         self.subtitle.setStyleSheet(f"color:{theme.MUTED};")
         left.addWidget(title)
         left.addWidget(self.subtitle)
-        lay.addLayout(left)
-        lay.addStretch(1)
+        lay.addWidget(left_w, 1)
 
         # Every pill is top-aligned and PILL_H tall, so they all share one center line
-        seg = SegmentedTabs(("Songs", "Albums", "Artists", "Folders"), PILL_H)
+        seg = SegmentedTabs(("Songs", "Albums", "Artists"), PILL_H)
         seg.idClicked.connect(self.tabChanged)
         self.seg = seg
         lay.addWidget(seg, 0, Qt.AlignTop)
-        lay.addStretch(1)
+        lay.addSpacing(TAB_SHIFT_LEFT * 2)  # the two equal groups share the rest, so this moves the capsule by half of it
+
+        right_w = QWidget()
+        right_w.setProperty("dragRegion", True)
+        rlay = QHBoxLayout(right_w)
+        rlay.setContentsMargins(0, 0, 0, 0)
+        rlay.addStretch(1)
+        lay.addWidget(right_w, 1, Qt.AlignTop)
 
         self.search = QLineEdit()
         self.search.setObjectName("search")
@@ -109,7 +121,7 @@ class LibraryHeader(QWidget):
         self.search.setFixedSize(300, PILL_H)
         SearchIcon(self.search)
         self.search.textChanged.connect(self.searchChanged)
-        lay.addWidget(self.search, 0, Qt.AlignTop)
+        rlay.addWidget(self.search, 0, Qt.AlignTop)
         # Page action ("+ New playlist"); the wrapper carries its left gap so nothing is left over when hidden
         self.action_wrap = QWidget()
         al = QHBoxLayout(self.action_wrap)
@@ -118,12 +130,12 @@ class LibraryHeader(QWidget):
         self.new_btn.clicked.connect(lambda: self.newPlaylistClicked.emit())
         al.addWidget(self.new_btn)
         self.action_wrap.hide()
-        lay.addWidget(self.action_wrap, 0, Qt.AlignTop)
-        lay.addSpacing(12)
+        rlay.addWidget(self.action_wrap, 0, Qt.AlignTop)
+        rlay.addSpacing(12)
 
         self.controls = WindowControls()
         self.controls.setFixedHeight(PILL_H)
-        lay.addWidget(self.controls, 0, Qt.AlignTop)
+        rlay.addWidget(self.controls, 0, Qt.AlignTop)
 
     def set_stats(self, count: int, total_seconds: float):
         h, m = int(total_seconds // 3600), int(total_seconds % 3600 // 60)

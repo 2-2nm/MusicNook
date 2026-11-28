@@ -217,8 +217,15 @@ class SidePanel(Card):
         self.stack.setCurrentIndex(i)
 
     def set_track(self, t):
-        self.lyrics.set_lines(audio_info.load_lyrics(t.path))
+        self._lyrics_track = t
+        self.lyrics.set_lines(audio_info.load_lyrics(t.path, t.title, t.artist))
         self.info.set_track(t)
+
+    def reload_lyrics(self):
+        """The lyrics folders changed: look again for the lyrics of the song on screen."""
+        t = getattr(self, "_lyrics_track", None)
+        if t is not None:
+            self.lyrics.set_lines(audio_info.load_lyrics(t.path, t.title, t.artist))
 
     def set_queue(self, queue, index: int):
         self.queue.set_queue(queue, index)

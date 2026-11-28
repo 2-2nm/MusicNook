@@ -6,6 +6,7 @@ from ui import theme
 from ui.icons import draw_icon
 from ui.logo import paint_logo
 from ui.components.common import Card, ElidedLabel
+from ui.shell.navigation import Page
 
 COLLAPSED_W = 72
 LABELS_MIN_W = 150  # labels, counts and the app title only show above this panel width
@@ -80,7 +81,6 @@ class SectionLabel(QWidget):
 
 class Sidebar(Card):
     pageSelected = Signal(int)
-    addFolderRequested = Signal()
     radius = 22
 
     def __init__(self, parent=None):
@@ -117,9 +117,9 @@ class Sidebar(Card):
 
         lay.addSpacing(10)
         lay.addWidget(SectionLabel("THIS PC"))
-        folders = NavItem("folder", "Add folder", checkable=False)
-        folders.clicked.connect(self.addFolderRequested)
-        lay.addWidget(folders)
+        self.nav_folders = NavItem("plus", "Folders")
+        self._group.addButton(self.nav_folders, Page.FOLDERS)
+        lay.addWidget(self.nav_folders)
 
         lay.addStretch(1)
         appearance = NavItem("sun", "Appearance", checkable=False)

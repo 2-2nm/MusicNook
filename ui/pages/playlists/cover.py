@@ -4,7 +4,7 @@ from PySide6.QtGui import QColor, QImage, QPainter, QPixmap
 
 from ui.rendering.cover_renderer import CoverRenderer
 from ui import theme
-from ui.rendering.accent import pick_accent
+from ui.rendering.accent import glow_hsv
 
 _custom: dict[str, QPixmap] = {}
 
@@ -75,12 +75,12 @@ def playlist_tint(covers: list, custom: QPixmap | None, key=None) -> QColor | No
                     pixels.append((c.hsvHue(), c.hsvSaturationF(), c.valueF()))
     result = None
     if pixels:
-        picked = pick_accent(pixels)
-        if picked is None:  # grey / black artwork: the app's own accent, like on the player page
+        picked = glow_hsv(pixels, QColor(theme.ACCENT).hsvHueF() * 360)  # same picker as the player page
+        if picked is None:
             result = QColor(theme.ACCENT)
         else:
             h, sat, val = picked
-            result = QColor.fromHsvF(h / 360, min(0.95, max(sat, 0.55)), min(0.95, max(val, 0.75)))
+            result = QColor.fromHsvF(h / 360, sat, val)
     if len(_tints) > 64:
         _tints.clear()
     _tints[ck] = result

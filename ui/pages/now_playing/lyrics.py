@@ -192,7 +192,7 @@ class LyricsView(QWidget):
             p.setFont(theme.font(13))
             p.setPen(QColor(theme.DIM))
             p.drawText(QRectF(20, h / 2 - 2, w - 40, 44), Qt.AlignHCenter | Qt.AlignTop | Qt.TextWordWrap,
-                       "Put a synced .lrc file with the same name next to the song.")
+                       "Put a synced .lrc file next to the song or in a lyrics folder.")
             return
         p.setFont(self._font())
         ww = self._wrap_width()

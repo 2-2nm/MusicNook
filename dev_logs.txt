@@ -1,6 +1,10 @@
+11/28/2026
+- added "Folders" tab where you can organize your music/lyrics folder
+- reduce ram usage from 600MB to ~200MB and ~100MB idle
+
 11/27/2026 (0.1.42)
 - added "Albums" tab in the library
-- i change the module
+- i change the module tree
 - you can drag the vinyl to seek or back
 - crash when scroll the albums until the bottom (fixed)
 

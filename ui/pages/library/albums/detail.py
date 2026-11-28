@@ -6,6 +6,7 @@ from domain.album import Album
 from ui import theme
 from ui.components.smooth_scroll import SmoothScrollArea
 from ui.components.common import Card, CoverLabel, ElidedLabel
+from ui.components.tint import TintFade, cover_tint
 from ui.shell.header import CapsuleButton
 
 COVER = 128
@@ -81,6 +82,8 @@ class AlbumDetail(Card):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self._tint = TintFade(self, QColor(79, 123, 255))  # the card follows the colour of the album cover
+        self._tint.changed.connect(self.update)
         self._rows: list[TrackRow] = []
         self.album: Album | None = None
         self._current_id = None
@@ -155,11 +158,16 @@ class AlbumDetail(Card):
 
     def paint_background(self, p: QPainter, r: QRectF):
         g = QLinearGradient(r.topLeft(), r.bottomLeft())
-        g.setColorAt(0.0, QColor(79, 123, 255, 78))
-        g.setColorAt(0.55, QColor(255, 255, 255, 14))
+        c = self._tint.color
+        top, mid, edge = QColor(c), QColor(c), QColor(c.lighter(135))
+        top.setAlpha(100)
+        mid.setAlpha(28)
+        edge.setAlpha(80)
+        g.setColorAt(0.0, top)
+        g.setColorAt(0.55, mid)
         g.setColorAt(1.0, QColor(255, 255, 255, 10))
         p.setBrush(g)
-        p.setPen(QColor(124, 156, 255, 70))
+        p.setPen(edge)
         p.drawRoundedRect(r, self.radius, self.radius)
 
     def set_album(self, album: Album | None):
@@ -182,6 +190,7 @@ class AlbumDetail(Card):
             self.meta.setText("")
             return
         self.cover.set_track(album.tracks[0])
+        self._tint.set_target(cover_tint(album.tracks[0]))
         self.title.setText(album.title)
         self.artist.setText(album.artist)
         mins = max(1, round(album.duration / 60))

@@ -6,7 +6,7 @@ from PySide6.QtWidgets import QSizePolicy, QWidget
 
 from ui.rendering.cover_renderer import CoverRenderer
 from ui import theme
-from ui.rendering.accent import pick_accent
+from ui.rendering.accent import glow_hsv
 
 COVER = 340
 DISC_R = 150
@@ -22,7 +22,7 @@ GROW_FROM_H, GROW_TO_H = 820, 1200  # window heights: up to the first the stage 
 
 
 def dominant_color(track) -> QColor:
-    """Glow colour of a cover (see pick_accent), pushed towards a vivid tone so it works as a glow."""
+    """Glow colour of a cover (see glow_hsv): vivid for a colourful cover, dark and muted for a mostly black one."""
     if track is None:
         return QColor(theme.ACCENT)
     img = CoverRenderer.pixmap(track, 48, 0).toImage().convertToFormat(QImage.Format_ARGB32)
@@ -32,11 +32,11 @@ def dominant_color(track) -> QColor:
             c = img.pixelColor(x, y)
             if c.alpha() >= 128:
                 pixels.append((c.hsvHue(), c.hsvSaturationF(), c.valueF()))
-    picked = pick_accent(pixels)
-    if picked is None:  # grey / black cover: fall back to the app's own accent
+    picked = glow_hsv(pixels, QColor(theme.ACCENT).hsvHueF() * 360)
+    if picked is None:  # nothing to look at (empty cover): the app's own accent
         return QColor(theme.ACCENT)
     h, sat, val = picked
-    return QColor.fromHsvF(h / 360, min(0.95, max(sat, 0.55)), min(0.95, max(val, 0.75)))
+    return QColor.fromHsvF(h / 360, sat, val)
 
 
 class Stage(QWidget):
